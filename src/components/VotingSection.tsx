@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, CreditCard, ChevronRight, Users, Plus, Minus, ArrowRight } from 'lucide-react';
+import { Check, ChevronRight, Users, Plus, Minus, ArrowRight } from 'lucide-react';
 import { VoteSession, VoterCode } from '../types';
 
 interface VotingSectionProps {
@@ -13,7 +13,7 @@ interface VotingSectionProps {
 
 export const VotingSection: React.FC<VotingSectionProps> = ({
   session,
-  voterCodes,
+  voterCodes = [],
   onVoteSubmitted,
   onNavigateToSpeakers,
   votedSessionIds,
@@ -21,7 +21,6 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
   const [step, setStep] = useState<'welcome' | 'auth' | 'options' | 'success'>('welcome');
   const [voterCode, setVoterCode] = useState<string>('');
   const [codeInputs, setCodeInputs] = useState<string[]>(['', '', '', '', '']);
-  const [isNfcScanning, setIsNfcScanning] = useState<boolean>(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   
   // Delegation
@@ -179,33 +178,6 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
     }
   };
 
-  // Simulate NFC scanning easily with absolute visual elegance
-  const simulateNfcScan = () => {
-    setIsNfcScanning(true);
-    setErrorMessage('');
-    
-    // Simulate a successful scan of a random valid voter code for this session
-    setTimeout(() => {
-      const validCodes = voterCodes.filter(c => session.groupIds.includes(c.groupId));
-      if (validCodes.length > 0) {
-        const randomCodeObj = validCodes[Math.floor(Math.random() * validCodes.length)];
-        const codeArray = randomCodeObj.code.split('');
-        setCodeInputs(codeArray);
-        setVoterCode(randomCodeObj.code);
-        setIsNfcScanning(false);
-        // Instant feedback and move to options
-        setStep('options');
-      } else {
-        // Fallback code
-        const fallback = 'FSB25';
-        setCodeInputs(fallback.split(''));
-        setVoterCode(fallback);
-        setIsNfcScanning(false);
-        setStep('options');
-      }
-    }, 1500);
-  };
-
   const handleDelegationChange = (increment: boolean) => {
     setDelegationCount(prev => {
       const newVal = increment ? Math.min(prev + 1, 9) : Math.max(prev - 1, 0);
@@ -276,7 +248,7 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
               {session.title}
             </h2>
             <p className="text-slate-500 text-sm leading-relaxed mb-8">
-              Diese Abstimmung ist jetzt aktiv geschaltet. Bitte halte deinen 5-stelligen Wählercode oder deine offizielle FSBS-NFC-Karte bereit.
+              Diese Abstimmung ist jetzt aktiv geschaltet. Bitte halte deinen 5-stelligen Wählercode bereit.
             </p>
             <button
               onClick={handleStartVote}
@@ -309,72 +281,13 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
               Wahl-Zugang
             </h2>
             <p className="text-slate-500 text-xs text-center mb-6 leading-relaxed">
-              Verifiziere deine Stimmberechtigung mit deiner NFC-Karte oder durch Eingabe deines Wählercodes.
+              Verifiziere deine Stimmberechtigung durch Eingabe deines Wählercodes.
             </p>
-
-            {/* NFC Scan Simulation Wrapper */}
-            <div className="mb-8 p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center relative overflow-hidden">
-              <AnimatePresence mode="wait">
-                {isNfcScanning ? (
-                  <motion.div
-                    key="scanning"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex flex-col items-center justify-center py-4"
-                  >
-                    {/* Pulsing NFC Ring */}
-                    <div className="relative w-20 h-20 rounded-full border-2 border-indigo-600 flex items-center justify-center animate-pulse">
-                      <motion.div
-                        className="absolute inset-0 rounded-full border-2 border-indigo-600"
-                        animate={{ scale: [1, 1.4, 1], opacity: [1, 0, 1] }}
-                        transition={{ repeat: Infinity, duration: 2 }}
-                      />
-                      <CreditCard size={32} className="text-indigo-600" />
-                    </div>
-                    <p className="mt-4 text-sm font-bold text-slate-900 animate-pulse">
-                      Suche nach NFC-Karte...
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Halte das Smartphone oder die Karte nah an den Sensor.
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="idle"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex flex-col items-center justify-center py-2"
-                  >
-                    <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mb-3">
-                      <CreditCard size={24} className="text-indigo-600" />
-                    </div>
-                    <button
-                      onClick={simulateNfcScan}
-                      className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:border-indigo-600 text-indigo-600 font-bold text-xs tracking-wide transition-all duration-200 shadow-sm"
-                      id="simulate_nfc_btn"
-                    >
-                      Simulation: NFC-Karte scannen
-                    </button>
-                    <p className="text-[10px] text-slate-400 mt-2">
-                      Simuliert das berührungslose Einloggen via Chipkarte.
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="relative flex py-2 items-center mb-6">
-              <div className="flex-grow border-t border-slate-200 opacity-50"></div>
-              <span className="flex-shrink mx-4 text-[10px] text-slate-400 uppercase tracking-widest font-black">ODER</span>
-              <div className="flex-grow border-t border-slate-200 opacity-50"></div>
-            </div>
 
             {/* Manual Code Input */}
             <div className="space-y-4">
               <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 text-center mb-2">
-                Code manuell eingeben
+                Bitte 5-stelligen Code eingeben
               </label>
               <div className="flex gap-2 justify-center" id="code_inputs_row">
                 {codeInputs.map((char, index) => (
@@ -400,7 +313,7 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
 
               <button
                 onClick={handleManualAuthSubmit}
-                className="w-full py-4 mt-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs tracking-wider uppercase transition-all duration-300"
+                className="w-full py-4 mt-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-wider uppercase transition-all duration-300"
                 id="submit_manual_code_btn"
               >
                 Bestätigen
@@ -408,7 +321,7 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
 
               <button
                 onClick={() => setStep('welcome')}
-                className="w-full py-2.5 text-slate-500 hover:text-slate-800 font-bold text-xs tracking-wider uppercase transition-colors"
+                className="w-full py-2.5 text-slate-500 hover:text-slate-850 font-bold text-xs tracking-wider uppercase transition-colors"
                 id="back_to_welcome_btn"
               >
                 Zurück
