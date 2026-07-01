@@ -17,6 +17,22 @@ function generateCode(): string {
   return c;
 }
 
+// Helper to generate standard RFC4122 v4 UUIDs
+function generateUUID(): string {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    try {
+      return window.crypto.randomUUID();
+    } catch (e) {
+      // Fallback to manual generation
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'vote' | 'speakers' | 'admin'>('vote');
 
@@ -270,7 +286,7 @@ export default function App() {
 
     // We build fallback configurations to handle various backend schema structures
     const strategies = [
-      // Standard snake_case
+      // Strategy 1: Standard snake_case with UUID and with 'status'
       {
         table: 'speaker_requests',
         payload: {
@@ -284,6 +300,20 @@ export default function App() {
           created_at: speaker.createdAt
         }
       },
+      // Strategy 2: Standard snake_case with UUID but WITHOUT 'status' (in case status column doesn't exist yet)
+      {
+        table: 'speaker_requests',
+        payload: {
+          id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          created_at: speaker.createdAt
+        }
+      },
+      // Strategy 3: Standard snake_case WITHOUT 'id' and WITH 'status' (let DB generate ID if default exists)
       {
         table: 'speaker_requests',
         payload: {
@@ -296,7 +326,19 @@ export default function App() {
           created_at: speaker.createdAt
         }
       },
-      // Standard camelCase
+      // Strategy 4: Standard snake_case WITHOUT 'id' and WITHOUT 'status'
+      {
+        table: 'speaker_requests',
+        payload: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          created_at: speaker.createdAt
+        }
+      },
+      // Strategy 5: Standard camelCase with 'status' (fallback)
       {
         table: 'speaker_requests',
         payload: {
@@ -310,66 +352,7 @@ export default function App() {
           createdAt: speaker.createdAt
         }
       },
-      {
-        table: 'speaker_requests',
-        payload: {
-          firstName: speaker.firstName,
-          lastName: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          createdAt: speaker.createdAt
-        }
-      },
-      // Snake_case WITHOUT 'type' (in case 'type' column is absent or reserved keyword in user schema)
-      {
-        table: 'speaker_requests',
-        payload: {
-          id: speaker.id,
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      {
-        table: 'speaker_requests',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      // Single 'name' field snake_case
-      {
-        table: 'speaker_requests',
-        payload: {
-          id: speaker.id,
-          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
-          department: speaker.department,
-          role: speaker.role,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      {
-        table: 'speaker_requests',
-        payload: {
-          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
-          department: speaker.department,
-          role: speaker.role,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      
-      // Alternative table: 'speakers'
+      // Strategy 6: Alternative table: 'speakers' (fallback)
       {
         table: 'speakers',
         payload: {
@@ -379,87 +362,6 @@ export default function App() {
           department: speaker.department,
           role: speaker.role,
           type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      {
-        table: 'speakers',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      {
-        table: 'speakers',
-        payload: {
-          id: speaker.id,
-          firstName: speaker.firstName,
-          lastName: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          createdAt: speaker.createdAt
-        }
-      },
-      {
-        table: 'speakers',
-        payload: {
-          firstName: speaker.firstName,
-          lastName: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          createdAt: speaker.createdAt
-        }
-      },
-      {
-        table: 'speakers',
-        payload: {
-          id: speaker.id,
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      {
-        table: 'speakers',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      {
-        table: 'speakers',
-        payload: {
-          id: speaker.id,
-          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
-          department: speaker.department,
-          role: speaker.role,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      {
-        table: 'speakers',
-        payload: {
-          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
-          department: speaker.department,
-          role: speaker.role,
           status: speaker.status,
           created_at: speaker.createdAt
         }
@@ -1004,7 +906,7 @@ export default function App() {
   const handleCreateSession = async (title: string, options: string[], groupIds: string[], allowDelegation: boolean) => {
     const closedPrevious = sessions.map(s => s.status === 'open' ? { ...s, status: 'closed' as const } : s);
     const newSession: VoteSession = {
-      id: `session-${Date.now()}`,
+      id: generateUUID(),
       title,
       options,
       status: 'open',
@@ -1056,7 +958,7 @@ export default function App() {
     type: 'normal' | 'go'
   ) => {
     const newRequest: SpeakerRequest = {
-      id: `speak-${Date.now()}`,
+      id: generateUUID(),
       firstName,
       lastName,
       department,
@@ -1133,7 +1035,7 @@ export default function App() {
 
   const handleCreateGroup = async (name: string, count: number) => {
     const newGroup: VoterGroup = {
-      id: `group-${Date.now()}`,
+      id: generateUUID(),
       name,
       createdAt: new Date().toISOString(),
     };
@@ -1162,7 +1064,7 @@ export default function App() {
     delegationNames: string[] | null
   ) => {
     const newVote: Vote = {
-      id: `vote-${Date.now()}`,
+      id: generateUUID(),
       sessionId,
       optionIndex,
       voterCode: code,
