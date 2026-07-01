@@ -145,61 +145,155 @@ export default function App() {
     }
   };
 
+  const getSafeIdValue = (id: string) => {
+    const num = Number(id);
+    if (!isNaN(num) && id.trim() !== '') {
+      return num;
+    }
+    return id;
+  };
+
   // 4. Submit Vote to Supabase
   const submitVoteToSupabase = async (vote: Vote) => {
     if (!supabase) return false;
-    try {
-      const payload = {
-        id: vote.id,
-        session_id: vote.sessionId,
-        option_index: vote.optionIndex,
-        voter_code: vote.voterCode,
-        voter_token: vote.voterToken,
-        weight: vote.weight,
-        delegation_names: vote.delegationNames,
-        created_at: vote.createdAt
-      };
 
-      let { error } = await supabase.from('votes').insert([payload]);
-      if (error) {
-        const payloadAlt = {
+    const payloads = [
+      {
+        table: 'votes',
+        payloadWithId: {
+          id: vote.id,
+          session_id: vote.sessionId,
+          option_index: vote.optionIndex,
+          voter_code: vote.voterCode,
+          voter_token: vote.voterToken,
+          weight: vote.weight,
+          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
+          created_at: vote.createdAt
+        },
+        payloadWithoutId: {
+          session_id: vote.sessionId,
+          option_index: vote.optionIndex,
+          voter_code: vote.voterCode,
+          voter_token: vote.voterToken,
+          weight: vote.weight,
+          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
+          created_at: vote.createdAt
+        }
+      },
+      {
+        table: 'votes',
+        payloadWithId: {
           id: vote.id,
           sessionId: vote.sessionId,
           optionIndex: vote.optionIndex,
           voterCode: vote.voterCode,
           voterToken: vote.voterToken,
           weight: vote.weight,
-          delegationNames: vote.delegationNames,
+          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
           createdAt: vote.createdAt
-        };
-        const res = await supabase.from('voted').insert([payloadAlt]);
-        error = res.error;
+        },
+        payloadWithoutId: {
+          sessionId: vote.sessionId,
+          optionIndex: vote.optionIndex,
+          voterCode: vote.voterCode,
+          voterToken: vote.voterToken,
+          weight: vote.weight,
+          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
+          createdAt: vote.createdAt
+        }
+      },
+      {
+        table: 'voted',
+        payloadWithId: {
+          id: vote.id,
+          session_id: vote.sessionId,
+          option_index: vote.optionIndex,
+          voter_code: vote.voterCode,
+          voter_token: vote.voterToken,
+          weight: vote.weight,
+          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
+          created_at: vote.createdAt
+        },
+        payloadWithoutId: {
+          session_id: vote.sessionId,
+          option_index: vote.optionIndex,
+          voter_code: vote.voterCode,
+          voter_token: vote.voterToken,
+          weight: vote.weight,
+          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
+          created_at: vote.createdAt
+        }
+      },
+      {
+        table: 'voted',
+        payloadWithId: {
+          id: vote.id,
+          sessionId: vote.sessionId,
+          optionIndex: vote.optionIndex,
+          voterCode: vote.voterCode,
+          voterToken: vote.voterToken,
+          weight: vote.weight,
+          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
+          createdAt: vote.createdAt
+        },
+        payloadWithoutId: {
+          sessionId: vote.sessionId,
+          optionIndex: vote.optionIndex,
+          voterCode: vote.voterCode,
+          voterToken: vote.voterToken,
+          weight: vote.weight,
+          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
+          createdAt: vote.createdAt
+        }
       }
-      return !error;
-    } catch (err) {
-      console.error("Error submitting vote to Supabase:", err);
-      return false;
+    ];
+
+    for (const item of payloads) {
+      try {
+        let { error } = await supabase.from(item.table).insert([item.payloadWithId]);
+        if (!error) return true;
+
+        let res = await supabase.from(item.table).insert([item.payloadWithoutId]);
+        if (!res.error) return true;
+      } catch (err) {
+        // Continue to next strategy
+      }
     }
+
+    console.error("All insertion strategies failed for vote.");
+    return false;
   };
 
   // 5. Submit Speaker Request to Supabase
   const submitSpeakerToSupabase = async (speaker: SpeakerRequest) => {
     if (!supabase) return false;
-    try {
-      const payload = {
-        id: speaker.id,
-        first_name: speaker.firstName,
-        last_name: speaker.lastName,
-        department: speaker.department,
-        role: speaker.role,
-        type: speaker.type,
-        status: speaker.status,
-        created_at: speaker.createdAt
-      };
 
-      let { error } = await supabase.from('speaker_requests').insert([payload]);
-      if (error) {
-        const payloadAlt = {
+    const payloads = [
+      {
+        table: 'speaker_requests',
+        payloadWithId: {
+          id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        },
+        payloadWithoutId: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speaker_requests',
+        payloadWithId: {
           id: speaker.id,
           firstName: speaker.firstName,
           lastName: speaker.lastName,
@@ -208,35 +302,108 @@ export default function App() {
           type: speaker.type,
           status: speaker.status,
           createdAt: speaker.createdAt
-        };
-        const res = await supabase.from('speakers').insert([payloadAlt]);
-        error = res.error;
+        },
+        payloadWithoutId: {
+          firstName: speaker.firstName,
+          lastName: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          createdAt: speaker.createdAt
+        }
+      },
+      {
+        table: 'speakers',
+        payloadWithId: {
+          id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        },
+        payloadWithoutId: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speakers',
+        payloadWithId: {
+          id: speaker.id,
+          firstName: speaker.firstName,
+          lastName: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          createdAt: speaker.createdAt
+        },
+        payloadWithoutId: {
+          firstName: speaker.firstName,
+          lastName: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          createdAt: speaker.createdAt
+        }
       }
-      return !error;
-    } catch (err) {
-      console.error("Error submitting speaker request to Supabase:", err);
-      return false;
+    ];
+
+    for (const item of payloads) {
+      try {
+        let { error } = await supabase.from(item.table).insert([item.payloadWithId]);
+        if (!error) return true;
+
+        let res = await supabase.from(item.table).insert([item.payloadWithoutId]);
+        if (!res.error) return true;
+      } catch (err) {
+        // Continue to next strategy
+      }
     }
+
+    console.error("All insertion strategies failed for speaker request.");
+    return false;
   };
 
   // --- Admin Supabase Sync Helper Functions ---
 
   const submitSessionToSupabase = async (session: VoteSession) => {
     if (!supabase) return false;
-    try {
-      const payload = {
-        id: session.id,
-        title: session.title,
-        options: JSON.stringify(session.options),
-        status: session.status,
-        group_ids: JSON.stringify(session.groupIds),
-        allow_delegation: session.allowDelegation,
-        created_at: session.createdAt
-      };
-      
-      let { error } = await supabase.from('sessions').insert([payload]);
-      if (error) {
-        const payloadAlt = {
+
+    const payloads = [
+      {
+        table: 'sessions',
+        payloadWithId: {
+          id: session.id,
+          title: session.title,
+          options: JSON.stringify(session.options),
+          status: session.status,
+          group_ids: JSON.stringify(session.groupIds),
+          allow_delegation: session.allowDelegation,
+          created_at: session.createdAt
+        },
+        payloadWithoutId: {
+          title: session.title,
+          options: JSON.stringify(session.options),
+          status: session.status,
+          group_ids: JSON.stringify(session.groupIds),
+          allow_delegation: session.allowDelegation,
+          created_at: session.createdAt
+        }
+      },
+      {
+        table: 'sessions',
+        payloadWithId: {
           id: session.id,
           title: session.title,
           options: JSON.stringify(session.options),
@@ -244,23 +411,81 @@ export default function App() {
           groupIds: JSON.stringify(session.groupIds),
           allowDelegation: session.allowDelegation,
           createdAt: session.createdAt
-        };
-        const res = await supabase.from('vote_sessions').insert([payloadAlt]);
-        error = res.error;
+        },
+        payloadWithoutId: {
+          title: session.title,
+          options: JSON.stringify(session.options),
+          status: session.status,
+          groupIds: JSON.stringify(session.groupIds),
+          allowDelegation: session.allowDelegation,
+          createdAt: session.createdAt
+        }
+      },
+      {
+        table: 'vote_sessions',
+        payloadWithId: {
+          id: session.id,
+          title: session.title,
+          options: JSON.stringify(session.options),
+          status: session.status,
+          group_ids: JSON.stringify(session.groupIds),
+          allow_delegation: session.allowDelegation,
+          created_at: session.createdAt
+        },
+        payloadWithoutId: {
+          title: session.title,
+          options: JSON.stringify(session.options),
+          status: session.status,
+          group_ids: JSON.stringify(session.groupIds),
+          allow_delegation: session.allowDelegation,
+          created_at: session.createdAt
+        }
+      },
+      {
+        table: 'vote_sessions',
+        payloadWithId: {
+          id: session.id,
+          title: session.title,
+          options: JSON.stringify(session.options),
+          status: session.status,
+          groupIds: JSON.stringify(session.groupIds),
+          allowDelegation: session.allowDelegation,
+          createdAt: session.createdAt
+        },
+        payloadWithoutId: {
+          title: session.title,
+          options: JSON.stringify(session.options),
+          status: session.status,
+          groupIds: JSON.stringify(session.groupIds),
+          allowDelegation: session.allowDelegation,
+          createdAt: session.createdAt
+        }
       }
-      return !error;
-    } catch (err) {
-      console.error("Error submitting session to Supabase:", err);
-      return false;
+    ];
+
+    for (const item of payloads) {
+      try {
+        let { error } = await supabase.from(item.table).insert([item.payloadWithId]);
+        if (!error) return true;
+
+        let res = await supabase.from(item.table).insert([item.payloadWithoutId]);
+        if (!res.error) return true;
+      } catch (err) {
+        // Continue to next strategy
+      }
     }
+
+    console.error("All insertion strategies failed for session.");
+    return false;
   };
 
   const closeSessionInSupabase = async (id: string) => {
     if (!supabase) return false;
     try {
-      let { error } = await supabase.from('sessions').update({ status: 'closed' }).eq('id', id);
+      const val = getSafeIdValue(id);
+      let { error } = await supabase.from('sessions').update({ status: 'closed' }).eq('id', val);
       if (error) {
-        const res = await supabase.from('vote_sessions').update({ status: 'closed' }).eq('id', id);
+        const res = await supabase.from('vote_sessions').update({ status: 'closed' }).eq('id', val);
         error = res.error;
       }
       return !error;
@@ -273,9 +498,10 @@ export default function App() {
   const deleteSessionInSupabase = async (id: string) => {
     if (!supabase) return false;
     try {
-      let { error } = await supabase.from('sessions').delete().eq('id', id);
+      const val = getSafeIdValue(id);
+      let { error } = await supabase.from('sessions').delete().eq('id', val);
       if (error) {
-        const res = await supabase.from('vote_sessions').delete().eq('id', id);
+        const res = await supabase.from('vote_sessions').delete().eq('id', val);
         error = res.error;
       }
       return !error;
@@ -288,9 +514,10 @@ export default function App() {
   const updateSpeakerStatusInSupabase = async (id: string, status: 'queued' | 'speaking' | 'done') => {
     if (!supabase) return false;
     try {
-      let { error } = await supabase.from('speaker_requests').update({ status }).eq('id', id);
+      const val = getSafeIdValue(id);
+      let { error } = await supabase.from('speaker_requests').update({ status }).eq('id', val);
       if (error) {
-        const res = await supabase.from('speakers').update({ status }).eq('id', id);
+        const res = await supabase.from('speakers').update({ status }).eq('id', val);
         error = res.error;
       }
       return !error;
@@ -303,9 +530,10 @@ export default function App() {
   const deleteSpeakerInSupabase = async (id: string) => {
     if (!supabase) return false;
     try {
-      let { error } = await supabase.from('speaker_requests').delete().eq('id', id);
+      const val = getSafeIdValue(id);
+      let { error } = await supabase.from('speaker_requests').delete().eq('id', val);
       if (error) {
-        const res = await supabase.from('speakers').delete().eq('id', id);
+        const res = await supabase.from('speakers').delete().eq('id', val);
         error = res.error;
       }
       return !error;
@@ -333,33 +561,79 @@ export default function App() {
   const submitVoterGroupToSupabase = async (group: VoterGroup, codes: VoterCode[]) => {
     if (!supabase) return false;
     try {
-      const groupPayload = {
-        id: group.id,
-        name: group.name,
-        created_at: group.createdAt
-      };
-      let { error: groupError } = await supabase.from('voter_groups').insert([groupPayload]);
-      if (groupError) {
-        const groupPayloadAlt = {
-          id: group.id,
-          name: group.name,
-          createdAt: group.createdAt
-        };
-        await supabase.from('groups').insert([groupPayloadAlt]);
+      let actualGroupId = group.id;
+      let inserted = false;
+
+      const groupPayloads = [
+        {
+          table: 'voter_groups',
+          payloadWithId: { id: group.id, name: group.name, created_at: group.createdAt },
+          payloadWithoutId: { name: group.name, created_at: group.createdAt }
+        },
+        {
+          table: 'voter_groups',
+          payloadWithId: { id: group.id, name: group.name, createdAt: group.createdAt },
+          payloadWithoutId: { name: group.name, createdAt: group.createdAt }
+        },
+        {
+          table: 'groups',
+          payloadWithId: { id: group.id, name: group.name, created_at: group.createdAt },
+          payloadWithoutId: { name: group.name, created_at: group.createdAt }
+        },
+        {
+          table: 'groups',
+          payloadWithId: { id: group.id, name: group.name, createdAt: group.createdAt },
+          payloadWithoutId: { name: group.name, createdAt: group.createdAt }
+        }
+      ];
+
+      for (const item of groupPayloads) {
+        try {
+          let { data, error } = await supabase.from(item.table).insert([item.payloadWithId]).select();
+          if (!error) {
+            if (data && data[0]) actualGroupId = data[0].id.toString();
+            inserted = true;
+            break;
+          }
+
+          let res = await supabase.from(item.table).insert([item.payloadWithoutId]).select();
+          if (!res.error) {
+            if (res.data && res.data[0]) actualGroupId = res.data[0].id.toString();
+            inserted = true;
+            break;
+          }
+        } catch (err) {
+          // Continue to next strategy
+        }
       }
 
-      const codePayloads = codes.map(c => ({
-        code: c.code,
-        group_id: c.groupId
-      }));
-      let { error: codesError } = await supabase.from('voter_codes').insert(codePayloads);
-      if (codesError) {
-        const codePayloadsAlt = codes.map(c => ({
-          code: c.code,
-          groupId: c.groupId
-        }));
-        await supabase.from('codes').insert(codePayloadsAlt);
+      if (!inserted) {
+        console.error("Failed to insert voter group with any strategy.");
+        return false;
       }
+
+      // Now insert codes using the actualGroupId
+      const codeTables = ['voter_codes', 'codes'];
+      for (const table of codeTables) {
+        try {
+          const payloadsSnake = codes.map(c => ({
+            code: c.code,
+            group_id: actualGroupId
+          }));
+          let { error } = await supabase.from(table).insert(payloadsSnake);
+          if (!error) return true;
+
+          const payloadsCamel = codes.map(c => ({
+            code: c.code,
+            groupId: actualGroupId
+          }));
+          let res = await supabase.from(table).insert(payloadsCamel);
+          if (!res.error) return true;
+        } catch (err) {
+          // Continue
+        }
+      }
+
       return true;
     } catch (err) {
       console.error("Error submitting groups/codes to Supabase:", err);
@@ -672,18 +946,32 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
 
+    // Optimistic state update for zero-latency local user experience
+    const updated = [...speakerRequests, newRequest];
+    setSpeakerRequests(updated);
+
     if (isSupabaseConfigured && supabase) {
       const success = await submitSpeakerToSupabase(newRequest);
       if (!success) {
         console.warn("Failed to submit speaker to Supabase, saving locally");
+        saveSpeakersToStorage(updated);
+      } else {
+        fetchSpeakerRequests();
       }
-      fetchSpeakerRequests();
     } else {
-      saveSpeakersToStorage([...speakerRequests, newRequest]);
+      saveSpeakersToStorage(updated);
     }
   };
 
   const handleUpdateSpeakerStatus = async (id: string, status: 'queued' | 'speaking' | 'done') => {
+    // Optimistic state update for zero-latency local admin experience
+    let updated = [...speakerRequests];
+    if (status === 'speaking') {
+      updated = updated.map(r => r.status === 'speaking' ? { ...r, status: 'done' as const } : r);
+    }
+    updated = updated.map(r => r.id === id ? { ...r, status } : r);
+    setSpeakerRequests(updated);
+
     if (isSupabaseConfigured && supabase) {
       if (status === 'speaking') {
         const speakingRequests = speakerRequests.filter(r => r.status === 'speaking');
@@ -694,26 +982,27 @@ export default function App() {
       await updateSpeakerStatusInSupabase(id, status);
       fetchSpeakerRequests();
     } else {
-      let updated = [...speakerRequests];
-      if (status === 'speaking') {
-        updated = updated.map(r => r.status === 'speaking' ? { ...r, status: 'done' as const } : r);
-      }
-      updated = updated.map(r => r.id === id ? { ...r, status } : r);
       saveSpeakersToStorage(updated);
     }
   };
 
   const handleDeleteSpeaker = async (id: string) => {
+    // Optimistic state update
+    const updated = speakerRequests.filter(r => r.id !== id);
+    setSpeakerRequests(updated);
+
     if (isSupabaseConfigured && supabase) {
       await deleteSpeakerInSupabase(id);
       fetchSpeakerRequests();
     } else {
-      const updated = speakerRequests.filter(r => r.id !== id);
       saveSpeakersToStorage(updated);
     }
   };
 
   const handleClearSpeakers = async () => {
+    // Optimistic state update
+    setSpeakerRequests([]);
+
     if (isSupabaseConfigured && supabase) {
       await clearSpeakersInSupabase();
       fetchSpeakerRequests();
