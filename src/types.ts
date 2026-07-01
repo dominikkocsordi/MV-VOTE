@@ -16,6 +16,7 @@ export interface SpeakerRequest {
   role: string | null;
   type: 'normal' | 'go';
   status: 'queued' | 'speaking' | 'done';
+  completed?: boolean;
   createdAt: string;
 }
 

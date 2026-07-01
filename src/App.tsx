@@ -144,16 +144,28 @@ export default function App() {
 
       if (data) {
         // Filter out done speakers from the general user view, or let them see all
-        const formatted: SpeakerRequest[] = data.map((item: any) => ({
-          id: item.id.toString(),
-          firstName: item.first_name || item.firstName,
-          lastName: item.last_name || item.lastName,
-          department: item.department || '',
-          role: item.role || '',
-          type: (item.type || 'normal') as 'normal' | 'go',
-          status: (item.status || 'queued') as 'queued' | 'speaking' | 'done',
-          createdAt: item.created_at || item.createdAt || new Date().toISOString()
-        }));
+        const formatted: SpeakerRequest[] = data.map((item: any) => {
+          let status: 'queued' | 'speaking' | 'done' = 'queued';
+          if (item.completed === true || item.status === 'done') {
+            status = 'done';
+          } else if (item.status === 'speaking' || item.speaking === true) {
+            status = 'speaking';
+          } else {
+            status = 'queued';
+          }
+
+          return {
+            id: item.id.toString(),
+            firstName: item.first_name || item.firstName,
+            lastName: item.last_name || item.lastName,
+            department: item.department || '',
+            role: item.role || '',
+            type: (item.type || 'normal') as 'normal' | 'go',
+            status,
+            completed: item.completed ?? (status === 'done'),
+            createdAt: item.created_at || item.createdAt || new Date().toISOString()
+          };
+        });
         setSpeakerRequests(formatted);
       }
     } catch (err) {
@@ -286,7 +298,63 @@ export default function App() {
 
     // We build fallback configurations to handle various backend schema structures
     const strategies = [
-      // Strategy 1: Standard snake_case with UUID and with 'status'
+      // Strategy 1: Standard snake_case with UUID, status, and completed: false
+      {
+        table: 'speaker_requests',
+        payload: {
+          id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          completed: false,
+          created_at: speaker.createdAt
+        }
+      },
+      // Strategy 2: Standard snake_case with UUID and completed: false, but WITHOUT 'status'
+      {
+        table: 'speaker_requests',
+        payload: {
+          id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          completed: false,
+          created_at: speaker.createdAt
+        }
+      },
+      // Strategy 3: Standard snake_case WITHOUT 'id', WITH 'status' and completed: false
+      {
+        table: 'speaker_requests',
+        payload: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          completed: false,
+          created_at: speaker.createdAt
+        }
+      },
+      // Strategy 4: Standard snake_case WITHOUT 'id' and WITHOUT 'status', WITH completed: false
+      {
+        table: 'speaker_requests',
+        payload: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          completed: false,
+          created_at: speaker.createdAt
+        }
+      },
+      // Strategy 5: Standard snake_case with UUID and with 'status' (legacy fallback)
       {
         table: 'speaker_requests',
         payload: {
@@ -300,7 +368,7 @@ export default function App() {
           created_at: speaker.createdAt
         }
       },
-      // Strategy 2: Standard snake_case with UUID but WITHOUT 'status' (in case status column doesn't exist yet)
+      // Strategy 6: Standard snake_case with UUID but WITHOUT 'status' (legacy fallback)
       {
         table: 'speaker_requests',
         payload: {
@@ -313,32 +381,7 @@ export default function App() {
           created_at: speaker.createdAt
         }
       },
-      // Strategy 3: Standard snake_case WITHOUT 'id' and WITH 'status' (let DB generate ID if default exists)
-      {
-        table: 'speaker_requests',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 4: Standard snake_case WITHOUT 'id' and WITHOUT 'status'
-      {
-        table: 'speaker_requests',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 5: Standard camelCase with 'status' (fallback)
+      // Strategy 7: Standard camelCase with 'status' (fallback)
       {
         table: 'speaker_requests',
         payload: {
@@ -352,7 +395,7 @@ export default function App() {
           createdAt: speaker.createdAt
         }
       },
-      // Strategy 6: Alternative table: 'speakers' (fallback)
+      // Strategy 8: Alternative table: 'speakers' (fallback)
       {
         table: 'speakers',
         payload: {
@@ -537,10 +580,41 @@ export default function App() {
     if (!supabase) return false;
     try {
       const val = getSafeIdValue(id);
-      let { error } = await supabase.from('speaker_requests').update({ status }).eq('id', val);
+      const isCompleted = status === 'done';
+
+      // Strategy 1: Update both status and completed
+      let { error } = await supabase
+        .from('speaker_requests')
+        .update({ status, completed: isCompleted })
+        .eq('id', val);
+
       if (error) {
-        const res = await supabase.from('speakers').update({ status }).eq('id', val);
-        error = res.error;
+        // Strategy 2: Status column might not exist, try updating only completed
+        let res2 = await supabase
+          .from('speaker_requests')
+          .update({ completed: isCompleted })
+          .eq('id', val);
+
+        if (res2.error) {
+          // Strategy 3: Try standard status update on speaker_requests
+          let res3 = await supabase
+            .from('speaker_requests')
+            .update({ status })
+            .eq('id', val);
+
+          if (res3.error) {
+            // Strategy 4: Try on fallback table 'speakers'
+            let res4 = await supabase
+              .from('speakers')
+              .update({ status })
+              .eq('id', val);
+            error = res4.error;
+          } else {
+            error = null;
+          }
+        } else {
+          error = null;
+        }
       }
       return !error;
     } catch (err) {

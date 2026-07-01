@@ -570,13 +570,18 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                       )}
 
                       <div>
-                        <h4 className={`font-bold text-sm sm:text-base flex items-center gap-2 ${
+                        <h4 className={`font-bold text-sm sm:text-base flex items-center gap-2 flex-wrap ${
                           isDone ? 'line-through text-slate-400' : 'text-slate-900'
                         }`}>
                           {req.firstName} {req.lastName}
                           {isSpeaking && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-black uppercase tracking-widest animate-pulse">
                               Spricht
+                            </span>
+                          )}
+                          {!isSpeaking && !isDone && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700 font-bold uppercase tracking-wider">
+                              Wartend
                             </span>
                           )}
                           {isGo && !isSpeaking && (

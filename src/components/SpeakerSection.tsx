@@ -295,11 +295,15 @@ export const SpeakerSection: React.FC<SpeakerSectionProps> = ({
                         )}
 
                         <div>
-                          <h4 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                          <h4 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2 flex-wrap">
                             {req.firstName} {req.lastName}
-                            {isSpeaking && (
+                            {isSpeaking ? (
                               <span className="text-[9px] px-2 py-0.5 rounded bg-indigo-600 text-white font-black uppercase tracking-widest animate-pulse">
                                 Spricht
+                              </span>
+                            ) : (
+                              <span className="text-[9px] px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700 font-bold uppercase tracking-wider">
+                                Wartend
                               </span>
                             )}
                             {isGo && !isSpeaking && (
