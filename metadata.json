@@ -1,0 +1,6 @@
+{
+  "name": "FSBS Abstimmungsportal",
+  "description": "Ein hochmodernes, responsives Abstimmungs- und Redelisten-Portal im edlen FSBS Design.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

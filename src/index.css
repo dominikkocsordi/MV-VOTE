@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-brand-bg-start: #F8FAFC; /* Slate 50 */
+  --color-brand-bg-end: #F1F5F9;   /* Slate 100 */
+  --color-brand-accent: #e56934;   /* orange */
+  --color-brand-accent-hover: #bf4c1c; /* dark orange */
+  --color-brand-accent-light: #fff5f0; /* very light orange */
+  --color-brand-border: #E2E8F0;   /* Slate 200 */
+  --color-brand-text: #2f202b;     /* plum */
+  --color-brand-muted: #64748B;    /* Slate 500 */
+  
+  --color-bento-indigo: #e56934;
+  --color-bento-indigo-light: #fff5f0;
+  --color-bento-amber: #e56934;
+  --color-bento-slate-dark: #2f202b;
+
+  /* Overwrite Tailwind's Indigo colors to match the FSBS brand palette */
+  --color-indigo-50: #fff5f0;
+  --color-indigo-100: #fde8dd;
+  --color-indigo-200: #fbcbb6;
+  --color-indigo-300: #f7a27e;
+  --color-indigo-400: #f27b49;
+  --color-indigo-500: #ee6327;
+  --color-indigo-600: #e56934;
+  --color-indigo-700: #bf4c1c;
+  --color-indigo-800: #933816;
+  --color-indigo-900: #2f202b;
+  --color-indigo-950: #1a1017;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-brand-bg-start);
+    color: var(--color-brand-text);
+    font-family: var(--font-sans);
+  }
+}
+
+/* Premium Bento Card effect with soft shadow */
+.premium-card {
+  background: #FFFFFF;
+  border: 1px solid var(--color-brand-border);
+  border-radius: 28px; /* rounded-3xl equivalent */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.08);
+}
+
+/* Grainy noise background simulation */
+.grainy-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  opacity: 0.015;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
