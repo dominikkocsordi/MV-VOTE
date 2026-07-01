@@ -268,20 +268,13 @@ export default function App() {
   const submitSpeakerToSupabase = async (speaker: SpeakerRequest) => {
     if (!supabase) return false;
 
-    const payloads = [
+    // We build fallback configurations to handle various backend schema structures
+    const strategies = [
+      // Standard snake_case
       {
         table: 'speaker_requests',
-        payloadWithId: {
+        payload: {
           id: speaker.id,
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        },
-        payloadWithoutId: {
           first_name: speaker.firstName,
           last_name: speaker.lastName,
           department: speaker.department,
@@ -293,7 +286,20 @@ export default function App() {
       },
       {
         table: 'speaker_requests',
-        payloadWithId: {
+        payload: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      // Standard camelCase
+      {
+        table: 'speaker_requests',
+        payload: {
           id: speaker.id,
           firstName: speaker.firstName,
           lastName: speaker.lastName,
@@ -302,8 +308,97 @@ export default function App() {
           type: speaker.type,
           status: speaker.status,
           createdAt: speaker.createdAt
-        },
-        payloadWithoutId: {
+        }
+      },
+      {
+        table: 'speaker_requests',
+        payload: {
+          firstName: speaker.firstName,
+          lastName: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          createdAt: speaker.createdAt
+        }
+      },
+      // Snake_case WITHOUT 'type' (in case 'type' column is absent or reserved keyword in user schema)
+      {
+        table: 'speaker_requests',
+        payload: {
+          id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speaker_requests',
+        payload: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      // Single 'name' field snake_case
+      {
+        table: 'speaker_requests',
+        payload: {
+          id: speaker.id,
+          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
+          department: speaker.department,
+          role: speaker.role,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speaker_requests',
+        payload: {
+          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
+          department: speaker.department,
+          role: speaker.role,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      
+      // Alternative table: 'speakers'
+      {
+        table: 'speakers',
+        payload: {
+          id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speakers',
+        payload: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speakers',
+        payload: {
+          id: speaker.id,
           firstName: speaker.firstName,
           lastName: speaker.lastName,
           department: speaker.department,
@@ -315,63 +410,88 @@ export default function App() {
       },
       {
         table: 'speakers',
-        payloadWithId: {
+        payload: {
+          firstName: speaker.firstName,
+          lastName: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          createdAt: speaker.createdAt
+        }
+      },
+      {
+        table: 'speakers',
+        payload: {
           id: speaker.id,
           first_name: speaker.firstName,
           last_name: speaker.lastName,
           department: speaker.department,
           role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        },
-        payloadWithoutId: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
           status: speaker.status,
           created_at: speaker.createdAt
         }
       },
       {
         table: 'speakers',
-        payloadWithId: {
+        payload: {
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speakers',
+        payload: {
           id: speaker.id,
-          firstName: speaker.firstName,
-          lastName: speaker.lastName,
+          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
           department: speaker.department,
           role: speaker.role,
-          type: speaker.type,
           status: speaker.status,
-          createdAt: speaker.createdAt
-        },
-        payloadWithoutId: {
-          firstName: speaker.firstName,
-          lastName: speaker.lastName,
+          created_at: speaker.createdAt
+        }
+      },
+      {
+        table: 'speakers',
+        payload: {
+          name: `${speaker.firstName} ${speaker.lastName}`.trim(),
           department: speaker.department,
           role: speaker.role,
-          type: speaker.type,
           status: speaker.status,
-          createdAt: speaker.createdAt
+          created_at: speaker.createdAt
         }
       }
     ];
 
-    for (const item of payloads) {
-      try {
-        let { error } = await supabase.from(item.table).insert([item.payloadWithId]);
-        if (!error) return true;
+    const errors: any[] = [];
 
-        let res = await supabase.from(item.table).insert([item.payloadWithoutId]);
-        if (!res.error) return true;
-      } catch (err) {
-        // Continue to next strategy
+    for (let i = 0; i < strategies.length; i++) {
+      const item = strategies[i];
+      try {
+        const { error } = await supabase.from(item.table).insert([item.payload]);
+        if (!error) {
+          console.log(`Successfully inserted speaker request in table '${item.table}' using strategy #${i + 1}`);
+          return true;
+        }
+        errors.push({
+          strategyIndex: i + 1,
+          table: item.table,
+          payloadKeys: Object.keys(item.payload),
+          error: error.message || error
+        });
+      } catch (err: any) {
+        errors.push({
+          strategyIndex: i + 1,
+          table: item.table,
+          exception: err.message || err
+        });
       }
     }
 
-    console.error("All insertion strategies failed for speaker request.");
+    console.error("All insertion strategies failed for speaker request. Detail logs:", errors);
     return false;
   };
 
