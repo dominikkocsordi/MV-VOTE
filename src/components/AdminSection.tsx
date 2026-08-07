@@ -1,7 +1,39 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, Power, Key, ListChecks, Users, Mic, Check, Trash, UserX, Sparkles, Trophy } from 'lucide-react';
-import { VoteSession, VoterGroup, VoterCode, SpeakerRequest, Vote } from '../types';
+import { Plus, Trash2, Power, Key, ListChecks, Users, Mic, Check, Clock, Trash, UserX, Sparkles, Trophy, LucideIcon } from 'lucide-react';
+import {
+  VoteSession,
+  VoterGroup,
+  VoterCode,
+  SpeakerRequest,
+  SpeakerStatus,
+  SPEAKER_STATUSES,
+  SPEAKER_STATUS_LABELS,
+  Vote,
+} from '../types';
+
+// The three states a speaker request can be switched to from the live panel.
+const SPEAKER_STATUS_ACTIONS: Record<SpeakerStatus, {
+  icon: LucideIcon;
+  activeClass: string;
+  notification: (firstName: string) => string;
+}> = {
+  queued: {
+    icon: Clock,
+    activeClass: 'bg-amber-500 text-white shadow-sm shadow-amber-100',
+    notification: (firstName) => `${firstName} steht wieder auf der Redeliste.`,
+  },
+  speaking: {
+    icon: Mic,
+    activeClass: 'bg-indigo-600 text-white shadow-sm shadow-indigo-100',
+    notification: (firstName) => `${firstName} ist jetzt aktiv am Rednerpult.`,
+  },
+  done: {
+    icon: Check,
+    activeClass: 'bg-slate-800 text-white shadow-sm',
+    notification: (firstName) => `Wortmeldung von ${firstName} beendet.`,
+  },
+};
 
 interface AdminSectionProps {
   sessions: VoteSession[];
@@ -574,24 +606,18 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                           isDone ? 'line-through text-slate-400' : 'text-slate-900'
                         }`}>
                           {req.firstName} {req.lastName}
-                          {isSpeaking && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-black uppercase tracking-widest animate-pulse">
-                              Spricht
-                            </span>
-                          )}
-                          {!isSpeaking && !isDone && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700 font-bold uppercase tracking-wider">
-                              Wartend
-                            </span>
-                          )}
-                          {isGo && !isSpeaking && (
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
+                            isSpeaking
+                              ? 'bg-indigo-600 text-white tracking-widest animate-pulse'
+                              : isDone
+                              ? 'bg-slate-200 text-slate-500'
+                              : 'bg-amber-50 border border-amber-200 text-amber-700'
+                          }`}>
+                            {SPEAKER_STATUS_LABELS[req.status]}
+                          </span>
+                          {isGo && !isSpeaking && !isDone && (
                             <span className="text-[8px] px-1.5 py-0.5 rounded bg-red-600 text-white font-black uppercase tracking-wider">
                               GO-Antrag
-                            </span>
-                          )}
-                          {isDone && (
-                            <span className="text-[8px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-black uppercase tracking-wider">
-                              Beendet
                             </span>
                           )}
                         </h4>
@@ -601,34 +627,37 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
-                      {!isSpeaking && !isDone && (
-                        <button
-                          onClick={() => {
-                            onUpdateSpeakerStatus(req.id, 'speaking');
-                            triggerNotification(`${req.firstName} ist jetzt aktiv am Rednerpult.`);
-                          }}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center gap-1 shadow-sm shadow-indigo-100"
-                          id={`start_speaking_btn_${req.id}`}
-                        >
-                          <Mic size={12} />
-                          Aufrufen
-                        </button>
-                      )}
-                      
-                      {isSpeaking && (
-                        <button
-                          onClick={() => {
-                            onUpdateSpeakerStatus(req.id, 'done');
-                            triggerNotification('Wortmeldung beendet.');
-                          }}
-                          className="px-3 py-1.5 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-colors flex items-center gap-1"
-                          id={`done_speaking_btn_${req.id}`}
-                        >
-                          <Check size={12} />
-                          Beenden
-                        </button>
-                      )}
+                    <div className="flex items-center gap-2">
+                      {/* Status switcher: sets the status directly instead of toggling a flag */}
+                      <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-100 border border-slate-200">
+                        {SPEAKER_STATUSES.map((status) => {
+                          const action = SPEAKER_STATUS_ACTIONS[status];
+                          const Icon = action.icon;
+                          const isActive = req.status === status;
+
+                          return (
+                            <button
+                              key={status}
+                              onClick={() => {
+                                if (isActive) return;
+                                onUpdateSpeakerStatus(req.id, status);
+                                triggerNotification(action.notification(req.firstName));
+                              }}
+                              aria-pressed={isActive}
+                              title={`Status: ${SPEAKER_STATUS_LABELS[status]}`}
+                              className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-colors flex items-center gap-1 ${
+                                isActive
+                                  ? action.activeClass
+                                  : 'text-slate-500 hover:bg-white hover:text-slate-800'
+                              }`}
+                              id={`speaker_status_${status}_btn_${req.id}`}
+                            >
+                              <Icon size={12} />
+                              <span className="hidden sm:inline">{SPEAKER_STATUS_LABELS[status]}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
 
                       <button
                         onClick={() => {

@@ -8,6 +8,16 @@ export interface VoteSession {
   createdAt: string;
 }
 
+export type SpeakerStatus = 'queued' | 'speaking' | 'done';
+
+export const SPEAKER_STATUSES: SpeakerStatus[] = ['queued', 'speaking', 'done'];
+
+export const SPEAKER_STATUS_LABELS: Record<SpeakerStatus, string> = {
+  queued: 'Wartend',
+  speaking: 'Spricht',
+  done: 'Beendet',
+};
+
 export interface SpeakerRequest {
   id: string;
   firstName: string;
@@ -15,8 +25,7 @@ export interface SpeakerRequest {
   department: string | null;
   role: string | null;
   type: 'normal' | 'go';
-  status: 'queued' | 'speaking' | 'done';
-  completed?: boolean;
+  status: SpeakerStatus;
   createdAt: string;
 }
 

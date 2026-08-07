@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { VoteSession, SpeakerRequest, VoterGroup, VoterCode, Vote } from './types';
+import { VoteSession, SpeakerRequest, SpeakerStatus, SPEAKER_STATUSES, VoterGroup, VoterCode, Vote } from './types';
 import { VotingSection } from './components/VotingSection';
 import { SpeakerSection } from './components/SpeakerSection';
 import { AdminSection } from './components/AdminSection';
@@ -31,6 +31,13 @@ function generateUUID(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+// The backend keeps the speaker state in a single 'status' column ('queued' | 'speaking' | 'done').
+// Anything unknown (or missing) is treated as a fresh, waiting request.
+function normalizeSpeakerStatus(value: any): SpeakerStatus {
+  const status = typeof value === 'string' ? value.toLowerCase().trim() : '';
+  return SPEAKER_STATUSES.includes(status as SpeakerStatus) ? (status as SpeakerStatus) : 'queued';
 }
 
 export default function App() {
@@ -143,29 +150,16 @@ export default function App() {
       }
 
       if (data) {
-        // Filter out done speakers from the general user view, or let them see all
-        const formatted: SpeakerRequest[] = data.map((item: any) => {
-          let status: 'queued' | 'speaking' | 'done' = 'queued';
-          if (item.completed === true || item.status === 'done') {
-            status = 'done';
-          } else if (item.status === 'speaking' || item.speaking === true) {
-            status = 'speaking';
-          } else {
-            status = 'queued';
-          }
-
-          return {
-            id: item.id.toString(),
-            firstName: item.first_name || item.firstName,
-            lastName: item.last_name || item.lastName,
-            department: item.department || '',
-            role: item.role || '',
-            type: (item.type || 'normal') as 'normal' | 'go',
-            status,
-            completed: item.completed ?? (status === 'done'),
-            createdAt: item.created_at || item.createdAt || new Date().toISOString()
-          };
-        });
+        const formatted: SpeakerRequest[] = data.map((item: any) => ({
+          id: item.id.toString(),
+          firstName: item.first_name || item.firstName,
+          lastName: item.last_name || item.lastName,
+          department: item.department || '',
+          role: item.role || '',
+          type: (item.type || 'normal') as 'normal' | 'go',
+          status: normalizeSpeakerStatus(item.status),
+          createdAt: item.created_at || item.createdAt || new Date().toISOString()
+        }));
         setSpeakerRequests(formatted);
       }
     } catch (err) {
@@ -296,65 +290,10 @@ export default function App() {
   const submitSpeakerToSupabase = async (speaker: SpeakerRequest) => {
     if (!supabase) return false;
 
-    // We build fallback configurations to handle various backend schema structures
+    // A new request always enters the list as 'queued'. We build fallback
+    // configurations to handle various backend schema structures.
     const strategies = [
-      // Strategy 1: Standard snake_case with UUID, status, and completed: false
-      {
-        table: 'speaker_requests',
-        payload: {
-          id: speaker.id,
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          completed: false,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 2: Standard snake_case with UUID and completed: false, but WITHOUT 'status'
-      {
-        table: 'speaker_requests',
-        payload: {
-          id: speaker.id,
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          completed: false,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 3: Standard snake_case WITHOUT 'id', WITH 'status' and completed: false
-      {
-        table: 'speaker_requests',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          completed: false,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 4: Standard snake_case WITHOUT 'id' and WITHOUT 'status', WITH completed: false
-      {
-        table: 'speaker_requests',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          completed: false,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 5: Standard snake_case with UUID and with 'status' (legacy fallback)
+      // Strategy 1: Standard snake_case with UUID and 'status'
       {
         table: 'speaker_requests',
         payload: {
@@ -368,20 +307,20 @@ export default function App() {
           created_at: speaker.createdAt
         }
       },
-      // Strategy 6: Standard snake_case with UUID but WITHOUT 'status' (legacy fallback)
+      // Strategy 2: Standard snake_case WITHOUT 'id' (database generates it)
       {
         table: 'speaker_requests',
         payload: {
-          id: speaker.id,
           first_name: speaker.firstName,
           last_name: speaker.lastName,
           department: speaker.department,
           role: speaker.role,
           type: speaker.type,
+          status: speaker.status,
           created_at: speaker.createdAt
         }
       },
-      // Strategy 7: Standard camelCase with 'status' (fallback)
+      // Strategy 3: camelCase columns (fallback)
       {
         table: 'speaker_requests',
         payload: {
@@ -395,11 +334,24 @@ export default function App() {
           createdAt: speaker.createdAt
         }
       },
-      // Strategy 8: Alternative table: 'speakers' (fallback)
+      // Strategy 4: Alternative table: 'speakers' (fallback)
       {
         table: 'speakers',
         payload: {
           id: speaker.id,
+          first_name: speaker.firstName,
+          last_name: speaker.lastName,
+          department: speaker.department,
+          role: speaker.role,
+          type: speaker.type,
+          status: speaker.status,
+          created_at: speaker.createdAt
+        }
+      },
+      // Strategy 5: Alternative table 'speakers' WITHOUT 'id' (fallback)
+      {
+        table: 'speakers',
+        payload: {
           first_name: speaker.firstName,
           last_name: speaker.lastName,
           department: speaker.department,
@@ -576,45 +528,28 @@ export default function App() {
     }
   };
 
-  const updateSpeakerStatusInSupabase = async (id: string, status: 'queued' | 'speaking' | 'done') => {
+  const updateSpeakerStatusInSupabase = async (id: string, status: SpeakerStatus) => {
     if (!supabase) return false;
     try {
       const val = getSafeIdValue(id);
-      const isCompleted = status === 'done';
 
-      // Strategy 1: Update both status and completed
+      // The status column is the single source of truth ('queued' | 'speaking' | 'done').
       let { error } = await supabase
         .from('speaker_requests')
-        .update({ status, completed: isCompleted })
+        .update({ status })
         .eq('id', val);
 
       if (error) {
-        // Strategy 2: Status column might not exist, try updating only completed
-        let res2 = await supabase
-          .from('speaker_requests')
-          .update({ completed: isCompleted })
+        // Fallback table 'speakers'
+        const res = await supabase
+          .from('speakers')
+          .update({ status })
           .eq('id', val);
+        error = res.error;
+      }
 
-        if (res2.error) {
-          // Strategy 3: Try standard status update on speaker_requests
-          let res3 = await supabase
-            .from('speaker_requests')
-            .update({ status })
-            .eq('id', val);
-
-          if (res3.error) {
-            // Strategy 4: Try on fallback table 'speakers'
-            let res4 = await supabase
-              .from('speakers')
-              .update({ status })
-              .eq('id', val);
-            error = res4.error;
-          } else {
-            error = null;
-          }
-        } else {
-          error = null;
-        }
+      if (error) {
+        console.error("Error updating speaker status in Supabase:", error);
       }
       return !error;
     } catch (err) {
@@ -1059,21 +994,23 @@ export default function App() {
     }
   };
 
-  const handleUpdateSpeakerStatus = async (id: string, status: 'queued' | 'speaking' | 'done') => {
+  const handleUpdateSpeakerStatus = async (id: string, status: SpeakerStatus) => {
+    // Only one person can hold the floor: everyone else currently 'speaking' is set to 'done'.
+    const previouslySpeaking = status === 'speaking'
+      ? speakerRequests.filter(r => r.status === 'speaking' && r.id !== id)
+      : [];
+
     // Optimistic state update for zero-latency local admin experience
-    let updated = [...speakerRequests];
-    if (status === 'speaking') {
-      updated = updated.map(r => r.status === 'speaking' ? { ...r, status: 'done' as const } : r);
-    }
-    updated = updated.map(r => r.id === id ? { ...r, status } : r);
+    const updated = speakerRequests.map(r => {
+      if (r.id === id) return { ...r, status };
+      if (previouslySpeaking.some(p => p.id === r.id)) return { ...r, status: 'done' as const };
+      return r;
+    });
     setSpeakerRequests(updated);
 
     if (isSupabaseConfigured && supabase) {
-      if (status === 'speaking') {
-        const speakingRequests = speakerRequests.filter(r => r.status === 'speaking');
-        for (const r of speakingRequests) {
-          await updateSpeakerStatusInSupabase(r.id, 'done');
-        }
+      for (const r of previouslySpeaking) {
+        await updateSpeakerStatusInSupabase(r.id, 'done');
       }
       await updateSpeakerStatusInSupabase(id, status);
       fetchSpeakerRequests();
