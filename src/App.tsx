@@ -530,32 +530,50 @@ export default function App() {
 
   const updateSpeakerStatusInSupabase = async (id: string, status: SpeakerStatus) => {
     if (!supabase) return false;
-    try {
-      const val = getSafeIdValue(id);
 
-      // The status column is the single source of truth ('queued' | 'speaking' | 'done').
-      let { error } = await supabase
-        .from('speaker_requests')
-        .update({ status })
-        .eq('id', val);
+    const val = getSafeIdValue(id);
 
-      if (error) {
-        // Fallback table 'speakers'
-        const res = await supabase
-          .from('speakers')
+    // The status column is the single source of truth ('queued' | 'speaking' | 'done').
+    // We try the numeric id first (bigint columns) and then the raw string (uuid/text columns).
+    const attempts: { table: string; id: string | number }[] = [
+      { table: 'speaker_requests', id: val },
+      ...(val !== id ? [{ table: 'speaker_requests', id }] : []),
+      { table: 'speakers', id: val }
+    ];
+
+    const problems: string[] = [];
+
+    for (const attempt of attempts) {
+      try {
+        // .select() makes the update verifiable: without it PostgREST answers
+        // "204 No Content" even when RLS silently filtered out every row.
+        const { data, error } = await supabase
+          .from(attempt.table)
           .update({ status })
-          .eq('id', val);
-        error = res.error;
-      }
+          .eq('id', attempt.id)
+          .select('id');
 
-      if (error) {
-        console.error("Error updating speaker status in Supabase:", error);
+        if (error) {
+          problems.push(`${attempt.table} (id=${attempt.id}): ${error.message}`);
+          continue;
+        }
+
+        if (data && data.length > 0) return true;
+
+        problems.push(
+          `${attempt.table} (id=${attempt.id}): kein Fehler, aber 0 Zeilen aktualisiert – ` +
+          `fehlt eine RLS-UPDATE-Policy für die Rolle 'anon'?`
+        );
+      } catch (err: any) {
+        problems.push(`${attempt.table} (id=${attempt.id}): ${err?.message || err}`);
       }
-      return !error;
-    } catch (err) {
-      console.error("Error updating speaker status in Supabase:", err);
-      return false;
     }
+
+    console.error(
+      `Status '${status}' konnte für Wortmeldung ${id} nicht gespeichert werden:`,
+      problems
+    );
+    return false;
   };
 
   const deleteSpeakerInSupabase = async (id: string) => {
@@ -1012,7 +1030,12 @@ export default function App() {
       for (const r of previouslySpeaking) {
         await updateSpeakerStatusInSupabase(r.id, 'done');
       }
-      await updateSpeakerStatusInSupabase(id, status);
+      const saved = await updateSpeakerStatusInSupabase(id, status);
+      if (!saved) {
+        // Without this the refetch below would silently revert the card and it
+        // would look like the button simply did nothing.
+        triggerNotification('Status konnte in der Datenbank nicht gespeichert werden (Details in der Konsole).');
+      }
       fetchSpeakerRequests();
     } else {
       saveSpeakersToStorage(updated);
