@@ -110,9 +110,21 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
       };
     });
 
+    // Wahlübertragungen: jede Stimme kann Vollmachten mitbringen, die Namen
+    // stehen in votes.delegation_names. Bewusst OHNE die gewählte Option --
+    // das Wahlgeheimnis gilt auch für die übertragenen Stimmen.
+    const delegations = sessionVotes
+      .flatMap(v => (v.delegationNames || []).map(name => ({
+        name: name.trim(),
+        carrierCode: v.voterCode
+      })))
+      .filter(d => d.name.length > 0)
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
     return {
       totalVotes,
       results: optionCounts,
+      delegations,
     };
   };
 
@@ -335,7 +347,7 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
               <div className="space-y-4" id="sessions_admin_list">
                 {sessions.map(s => {
                   const isOpen = s.status === 'open';
-                  const { totalVotes, results } = getSessionResults(s.id);
+                  const { totalVotes, results, delegations } = getSessionResults(s.id);
 
                   return (
                     <div key={s.id} className="premium-card p-6 space-y-4 relative overflow-hidden">
@@ -414,6 +426,46 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                             </div>
                           );
                         })}
+                      </div>
+
+                      {/* Namentliche Auflistung der Wahlübertragungen (votes.delegation_names) */}
+                      <div className="pt-3 border-t border-slate-100" id={`delegations_${s.id}`}>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <Users size={11} className="text-slate-400" />
+                            Wahlübertragungen
+                          </span>
+                          <span className="text-[10px] font-black text-slate-500 font-mono">
+                            {delegations.length} von {totalVotes} {totalVotes === 1 ? 'Stimme' : 'Stimmen'}
+                          </span>
+                        </div>
+
+                        {delegations.length === 0 ? (
+                          <p className="text-xs text-slate-400 font-semibold">
+                            {s.allowDelegation
+                              ? 'Bisher keine Stimmen übertragen.'
+                              : 'Für diesen Wahlgang sind keine Übertragungen zugelassen.'}
+                          </p>
+                        ) : (
+                          <ul className="flex flex-wrap gap-1.5">
+                            {delegations.map((d, i) => (
+                              <li
+                                key={`${d.name}-${i}`}
+                                className="flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-xl bg-slate-50 border border-slate-200"
+                              >
+                                <span className="text-xs font-bold text-slate-800">{d.name}</span>
+                                {d.carrierCode && (
+                                  <span
+                                    className="text-[9px] font-mono font-black text-slate-400 uppercase"
+                                    title="Code des Mitglieds, das die Stimme mitgebracht hat"
+                                  >
+                                    {d.carrierCode}
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     </div>
                   );

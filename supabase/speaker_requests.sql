@@ -25,7 +25,9 @@
 -- ohne passende Policy KEINEN Fehler zurück, es werden nur 0 Zeilen geändert.
 -- Die App meldet das seit dieser Version in der Browser-Konsole.
 --
--- Dieses Skript im Supabase SQL Editor ausführen.
+-- Dieses Skript im Supabase SQL Editor ausführen. Es ist idempotent und kann
+-- gefahrlos mehrfach laufen. Der SQL Editor führt alles in einer Transaktion
+-- aus: bricht ein Statement ab, wird auch alles davor zurückgerollt.
 
 
 -- 1) Gültige Statuswerte absichern -------------------------------------------
@@ -102,13 +104,39 @@ create policy "speaker_requests_delete"
 
 -- 4) Realtime ------------------------------------------------------------------
 -- Damit alle Geräte den Statuswechsel sofort sehen.
--- Fehler "relation is already member of publication" bedeutet: schon aktiv.
+-- Ein schlichtes "alter publication ... add table" wirft
+-- "relation is already member of publication", sobald die Tabelle bereits
+-- eingetragen ist. Da der SQL Editor das Skript in einer Transaktion ausführt,
+-- würde dieser Fehler auch die Policies oben wieder zurückrollen -- deshalb
+-- vorher prüfen.
 
-alter publication supabase_realtime add table public.speaker_requests;
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'speaker_requests'
+     )
+  then
+    alter publication supabase_realtime add table public.speaker_requests;
+  end if;
+end
+$$;
 
 
 -- 5) Prüfen --------------------------------------------------------------------
--- Erwartung: für select/insert/update/delete je eine Zeile.
+-- Erwartung: vier Zeilen (select/insert/update/delete) und realtime = true.
 
--- select cmd, policyname from pg_policies
--- where schemaname = 'public' and tablename = 'speaker_requests';
+select
+  (select count(*) from pg_policies
+    where schemaname = 'public' and tablename = 'speaker_requests') as policies,
+  (select string_agg(cmd, ', ' order by cmd) from pg_policies
+    where schemaname = 'public' and tablename = 'speaker_requests') as befehle,
+  exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'speaker_requests'
+  ) as realtime;

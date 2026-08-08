@@ -6,6 +6,7 @@ import { SpeakerSection } from './components/SpeakerSection';
 import { AdminSection } from './components/AdminSection';
 import { HelpCircle, Vote as VoteIcon, MessageSquare, Settings2, Sparkles } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { parseDelegationNames } from './lib/delegations';
 
 // Helper to generate local fallback codes
 function generateCode(): string {
@@ -620,9 +621,7 @@ export default function App() {
           voterCode: item.voter_code || item.voterCode || '',
           voterToken: item.voter_token || item.voterToken || '',
           weight: item.weight ?? 1,
-          delegationNames: Array.isArray(item.delegation_names || item.delegationNames)
-            ? (item.delegation_names || item.delegationNames)
-            : JSON.parse(item.delegation_names || item.delegationNames || 'null'),
+          delegationNames: parseDelegationNames(item.delegation_names ?? item.delegationNames),
           createdAt: item.created_at || item.createdAt || new Date().toISOString()
         }));
         setVotes(formatted);
