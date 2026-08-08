@@ -1,24 +1,38 @@
--- Redeliste (speaker_requests)
+-- Redeliste (public.speaker_requests)
 --
--- Der Status einer Wortmeldung wird ausschließlich über die Spalte 'status'
--- geführt: 'queued' | 'speaking' | 'done'.
+-- Passend zum bestehenden Schema:
 --
--- Häufigster Fehler: Die App kann eintragen und lesen, aber der Status bleibt
--- in der Datenbank auf 'queued'. Grund ist dann fast immer eine fehlende
--- UPDATE-Policy: Bei aktivem RLS liefert PostgREST für ein UPDATE ohne
--- passende Policy KEINEN Fehler zurück, es werden nur schlicht 0 Zeilen
--- geändert. Die App meldet das seit dieser Version in der Konsole.
+--   id          uuid    not null default gen_random_uuid()  (PK)
+--   first_name  text    not null
+--   last_name   text    not null
+--   type        text    not null default 'normal'   check (type in ('go','normal'))
+--   created_at  timestamptz default now()
+--   completed   boolean default false                -- Altlast, siehe Abschnitt 3
+--   department  text
+--   role        text
+--   status      text    not null default 'queued'    -- 'queued' | 'speaking' | 'done'
+--   started_at  timestamptz                          -- vom Trigger gesetzt
+--   ended_at    timestamptz                          -- vom Trigger gesetzt
+--
+--   trigger speaker_requests_track_times before insert or update
+--
+-- Die App schreibt ausschließlich 'status'. started_at/ended_at bleiben Sache
+-- des Triggers, die App fasst sie nicht an.
+--
+-- Häufigster Fehler: Eintragen und Anzeigen funktioniert, aber der Status
+-- bleibt in der Datenbank auf 'queued'. Grund ist dann fast immer eine
+-- fehlende UPDATE-Policy -- bei aktivem RLS liefert PostgREST für ein UPDATE
+-- ohne passende Policy KEINEN Fehler zurück, es werden nur 0 Zeilen geändert.
+-- Die App meldet das seit dieser Version in der Browser-Konsole.
 --
 -- Dieses Skript im Supabase SQL Editor ausführen.
 
 
--- 1) Statusspalte sicherstellen ------------------------------------------------
+-- 1) Gültige Statuswerte absichern -------------------------------------------
+-- Analog zum bereits vorhandenen speaker_requests_type_check.
+-- Schlägt fehl, falls noch andere Werte in der Tabelle stehen -- dann vorher:
+--   select distinct status from public.speaker_requests;
 
-alter table public.speaker_requests
-  add column if not exists status text not null default 'queued';
-
--- Nur gültige Werte zulassen (schlägt fehl, wenn das Constraint schon existiert
--- oder noch alte Werte in der Tabelle stehen -- dann vorher aufräumen).
 alter table public.speaker_requests
   drop constraint if exists speaker_requests_status_check;
 
@@ -31,7 +45,7 @@ alter table public.speaker_requests
 -- Die App läuft ohne Login, alle Zugriffe erfolgen mit der Rolle 'anon'.
 -- Achtung: Diese Policies sind bewusst offen -- wer den Anon-Key hat, kann die
 -- Redeliste lesen, ergänzen, ändern und leeren. Das entspricht dem bisherigen
--- Verhalten der App (Versammlungsbetrieb, keine personenbezogenen Geheimnisse).
+-- Verhalten der App (Versammlungsbetrieb, keine Geheimnisse in der Tabelle).
 
 alter table public.speaker_requests enable row level security;
 
@@ -67,13 +81,33 @@ create policy "speaker_requests_delete"
   using (true);
 
 
--- 3) Realtime ------------------------------------------------------------------
+-- 3) Spalte 'completed' ---------------------------------------------------------
+-- Die App nutzt nur noch 'status'. Damit 'completed' nicht widersprüchlich
+-- zurückbleibt (z.B. status='done' bei completed=false), eine der beiden
+-- Varianten wählen:
+--
+-- Variante A -- Spalte entfernen (empfohlen, wenn nichts anderes sie liest).
+--   Vorher prüfen, ob die Triggerfunktion speaker_requests_track_times() sie
+--   verwendet:  select prosrc from pg_proc where proname = 'speaker_requests_track_times';
+--
+-- alter table public.speaker_requests drop column completed;
+--
+-- Variante B -- Spalte automatisch aus dem Status ableiten, falls noch etwas
+-- anderes (Report, Export) darauf zugreift:
+--
+-- alter table public.speaker_requests drop column completed;
+-- alter table public.speaker_requests
+--   add column completed boolean generated always as (status = 'done') stored;
+
+
+-- 4) Realtime ------------------------------------------------------------------
 -- Damit alle Geräte den Statuswechsel sofort sehen.
+-- Fehler "relation is already member of publication" bedeutet: schon aktiv.
 
 alter publication supabase_realtime add table public.speaker_requests;
 
 
--- 4) Prüfen --------------------------------------------------------------------
+-- 5) Prüfen --------------------------------------------------------------------
 -- Erwartung: für select/insert/update/delete je eine Zeile.
 
 -- select cmd, policyname from pg_policies

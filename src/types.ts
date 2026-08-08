@@ -27,6 +27,9 @@ export interface SpeakerRequest {
   type: 'normal' | 'go';
   status: SpeakerStatus;
   createdAt: string;
+  // Werden vom Trigger 'speaker_requests_track_times' in der Datenbank gesetzt.
+  startedAt?: string | null;
+  endedAt?: string | null;
 }
 
 export interface VoterGroup {

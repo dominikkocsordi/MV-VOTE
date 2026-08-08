@@ -132,33 +132,33 @@ export default function App() {
   };
 
   // 3. Fetch Speaker Requests (Live Redeliste)
+  // Tabelle public.speaker_requests: id uuid, first_name, last_name, type,
+  // status, department, role, created_at, started_at, ended_at.
   const fetchSpeakerRequests = async () => {
     if (!supabase) return;
     try {
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from('speaker_requests')
-        .select('*')
+        .select('id, first_name, last_name, department, role, type, status, created_at, started_at, ended_at')
         .order('created_at', { ascending: true });
 
-      if (error || !data) {
-        const res = await supabase
-          .from('speakers')
-          .select('*')
-          .order('created_at', { ascending: true });
-        data = res.data;
-        error = res.error;
+      if (error) {
+        console.error("Error fetching speaker requests from Supabase:", error.message);
+        return;
       }
 
       if (data) {
         const formatted: SpeakerRequest[] = data.map((item: any) => ({
-          id: item.id.toString(),
-          firstName: item.first_name || item.firstName,
-          lastName: item.last_name || item.lastName,
-          department: item.department || '',
-          role: item.role || '',
-          type: (item.type || 'normal') as 'normal' | 'go',
+          id: item.id,
+          firstName: item.first_name,
+          lastName: item.last_name,
+          department: item.department,
+          role: item.role,
+          type: item.type === 'go' ? 'go' : 'normal',
           status: normalizeSpeakerStatus(item.status),
-          createdAt: item.created_at || item.createdAt || new Date().toISOString()
+          createdAt: item.created_at,
+          startedAt: item.started_at,
+          endedAt: item.ended_at
         }));
         setSpeakerRequests(formatted);
       }
@@ -287,109 +287,32 @@ export default function App() {
   };
 
   // 5. Submit Speaker Request to Supabase
+  // 'id' wird clientseitig als UUID erzeugt (Spalte ist uuid), 'created_at',
+  // 'started_at' und 'ended_at' überlässt die App der Datenbank bzw. dem
+  // Trigger 'speaker_requests_track_times'.
   const submitSpeakerToSupabase = async (speaker: SpeakerRequest) => {
     if (!supabase) return false;
 
-    // A new request always enters the list as 'queued'. We build fallback
-    // configurations to handle various backend schema structures.
-    const strategies = [
-      // Strategy 1: Standard snake_case with UUID and 'status'
-      {
-        table: 'speaker_requests',
-        payload: {
-          id: speaker.id,
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 2: Standard snake_case WITHOUT 'id' (database generates it)
-      {
-        table: 'speaker_requests',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 3: camelCase columns (fallback)
-      {
-        table: 'speaker_requests',
-        payload: {
-          id: speaker.id,
-          firstName: speaker.firstName,
-          lastName: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          createdAt: speaker.createdAt
-        }
-      },
-      // Strategy 4: Alternative table: 'speakers' (fallback)
-      {
-        table: 'speakers',
-        payload: {
-          id: speaker.id,
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      },
-      // Strategy 5: Alternative table 'speakers' WITHOUT 'id' (fallback)
-      {
-        table: 'speakers',
-        payload: {
-          first_name: speaker.firstName,
-          last_name: speaker.lastName,
-          department: speaker.department,
-          role: speaker.role,
-          type: speaker.type,
-          status: speaker.status,
-          created_at: speaker.createdAt
-        }
-      }
-    ];
+    try {
+      const { error } = await supabase.from('speaker_requests').insert([{
+        id: speaker.id,
+        first_name: speaker.firstName,
+        last_name: speaker.lastName,
+        department: speaker.department,
+        role: speaker.role,
+        type: speaker.type,
+        status: speaker.status
+      }]);
 
-    const errors: any[] = [];
-
-    for (let i = 0; i < strategies.length; i++) {
-      const item = strategies[i];
-      try {
-        const { error } = await supabase.from(item.table).insert([item.payload]);
-        if (!error) {
-          console.log(`Successfully inserted speaker request in table '${item.table}' using strategy #${i + 1}`);
-          return true;
-        }
-        errors.push({
-          strategyIndex: i + 1,
-          table: item.table,
-          payloadKeys: Object.keys(item.payload),
-          error: error.message || error
-        });
-      } catch (err: any) {
-        errors.push({
-          strategyIndex: i + 1,
-          table: item.table,
-          exception: err.message || err
-        });
+      if (error) {
+        console.error("Wortmeldung konnte nicht gespeichert werden:", error.message);
+        return false;
       }
+      return true;
+    } catch (err) {
+      console.error("Wortmeldung konnte nicht gespeichert werden:", err);
+      return false;
     }
-
-    console.error("All insertion strategies failed for speaker request. Detail logs:", errors);
-    return false;
   };
 
   // --- Admin Supabase Sync Helper Functions ---
@@ -528,66 +451,51 @@ export default function App() {
     }
   };
 
+  // Die Spalte 'status' ist die einzige Quelle der Wahrheit
+  // ('queued' | 'speaking' | 'done'). 'started_at'/'ended_at' setzt der
+  // Trigger 'speaker_requests_track_times' selbst.
   const updateSpeakerStatusInSupabase = async (id: string, status: SpeakerStatus) => {
     if (!supabase) return false;
 
-    const val = getSafeIdValue(id);
+    try {
+      // .select() macht das Update überprüfbar: ohne die Rückgabe antwortet
+      // PostgREST auch dann "204 No Content", wenn RLS jede Zeile herausfiltert.
+      const { data, error } = await supabase
+        .from('speaker_requests')
+        .update({ status })
+        .eq('id', id)
+        .select('id');
 
-    // The status column is the single source of truth ('queued' | 'speaking' | 'done').
-    // We try the numeric id first (bigint columns) and then the raw string (uuid/text columns).
-    const attempts: { table: string; id: string | number }[] = [
-      { table: 'speaker_requests', id: val },
-      ...(val !== id ? [{ table: 'speaker_requests', id }] : []),
-      { table: 'speakers', id: val }
-    ];
-
-    const problems: string[] = [];
-
-    for (const attempt of attempts) {
-      try {
-        // .select() makes the update verifiable: without it PostgREST answers
-        // "204 No Content" even when RLS silently filtered out every row.
-        const { data, error } = await supabase
-          .from(attempt.table)
-          .update({ status })
-          .eq('id', attempt.id)
-          .select('id');
-
-        if (error) {
-          problems.push(`${attempt.table} (id=${attempt.id}): ${error.message}`);
-          continue;
-        }
-
-        if (data && data.length > 0) return true;
-
-        problems.push(
-          `${attempt.table} (id=${attempt.id}): kein Fehler, aber 0 Zeilen aktualisiert – ` +
-          `fehlt eine RLS-UPDATE-Policy für die Rolle 'anon'?`
-        );
-      } catch (err: any) {
-        problems.push(`${attempt.table} (id=${attempt.id}): ${err?.message || err}`);
+      if (error) {
+        console.error(`Status '${status}' konnte für Wortmeldung ${id} nicht gespeichert werden:`, error.message);
+        return false;
       }
-    }
 
-    console.error(
-      `Status '${status}' konnte für Wortmeldung ${id} nicht gespeichert werden:`,
-      problems
-    );
-    return false;
+      if (!data || data.length === 0) {
+        console.error(
+          `Status '${status}' konnte für Wortmeldung ${id} nicht gespeichert werden: ` +
+          `kein Fehler, aber 0 Zeilen geändert – fehlt die RLS-UPDATE-Policy für die Rolle 'anon'?`
+        );
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error(`Status '${status}' konnte für Wortmeldung ${id} nicht gespeichert werden:`, err);
+      return false;
+    }
   };
 
   const deleteSpeakerInSupabase = async (id: string) => {
     if (!supabase) return false;
     try {
-      const val = getSafeIdValue(id);
-      let { error } = await supabase.from('speaker_requests').delete().eq('id', val);
+      const { error } = await supabase.from('speaker_requests').delete().eq('id', id);
       if (error) {
-        const res = await supabase.from('speakers').delete().eq('id', val);
-        error = res.error;
+        console.error("Wortmeldung konnte nicht gelöscht werden:", error.message);
       }
       return !error;
     } catch (err) {
-      console.error("Error deleting speaker in Supabase:", err);
+      console.error("Wortmeldung konnte nicht gelöscht werden:", err);
       return false;
     }
   };
@@ -595,14 +503,19 @@ export default function App() {
   const clearSpeakersInSupabase = async () => {
     if (!supabase) return false;
     try {
-      let { error } = await supabase.from('speaker_requests').delete().neq('id', '0');
+      // 'id' ist uuid – ein Filter wie neq('id', '0') würde an der Typprüfung
+      // scheitern, deshalb über eine nie zutreffende UUID alle Zeilen treffen.
+      const { error } = await supabase
+        .from('speaker_requests')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
       if (error) {
-        const res = await supabase.from('speakers').delete().neq('id', '0');
-        error = res.error;
+        console.error("Redeliste konnte nicht geleert werden:", error.message);
       }
       return !error;
     } catch (err) {
-      console.error("Error clearing speakers in Supabase:", err);
+      console.error("Redeliste konnte nicht geleert werden:", err);
       return false;
     }
   };
@@ -741,9 +654,6 @@ export default function App() {
       const speakersChannel = supabase
         .channel('realtime:speakers')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'speaker_requests' }, () => {
-          fetchSpeakerRequests();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'speakers' }, () => {
           fetchSpeakerRequests();
         })
         .subscribe();
