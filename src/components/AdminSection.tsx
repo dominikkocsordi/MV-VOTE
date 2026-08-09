@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, Power, Key, ListChecks, Users, Mic, Check, Clock, Trash, UserX, Sparkles, Trophy, LucideIcon } from 'lucide-react';
+import { Plus, Trash2, Power, Key, ListChecks, Users, Mic, Check, Clock, Trash, UserX, Sparkles, Trophy, AlertTriangle, LucideIcon } from 'lucide-react';
 import {
   VoteSession,
   VoterGroup,
@@ -91,18 +91,47 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
     }, 4000);
   };
 
+  // Namen der Vollmachten einer Stimme (leere Einträge fliegen raus).
+  const namesOf = (vote: Vote) =>
+    (vote.delegationNames || []).map(n => (n || '').trim()).filter(Boolean);
+
+  // Eine Stimme zählt als: eigene Stimme + Anzahl der Übertragungen.
+  // Das gespeicherte 'weight' dient nur noch als Untergrenze, falls
+  // Übertragungen ohne Namen erfasst wurden -- so ist die Summe nie zu klein,
+  // egal ob delegation_names oder weight lückenhaft ist.
+  const weightOf = (vote: Vote) => Math.max(1 + namesOf(vote).length, vote.weight || 1);
+
   // Calculate results for a session
   const getSessionResults = (sessionId: string) => {
     const sessionVotes = votes.filter(v => v.sessionId === sessionId);
     const session = sessions.find(s => s.id === sessionId);
-    if (!session) return { totalVotes: 0, results: [] };
 
-    const totalVotes = sessionVotes.reduce((sum, v) => sum + v.weight, 0);
-    
+    // Wahlübertragungen: jede Stimme kann Vollmachten mitbringen, die Namen
+    // stehen in votes.delegation_names. Bewusst OHNE die gewählte Option --
+    // das Wahlgeheimnis gilt auch für die übertragenen Stimmen.
+    const delegations = sessionVotes
+      .flatMap(v => namesOf(v).map(name => ({ name, carrierCode: v.voterCode })))
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+    // Übertragungen, die im Gewicht stecken, zu denen aber kein Name in der
+    // Datenbank steht. Werden ausgewiesen statt als Platzhalter erfunden.
+    const unnamedDelegations = sessionVotes.reduce(
+      (sum, v) => sum + Math.max(0, (v.weight || 1) - 1 - namesOf(v).length),
+      0
+    );
+
+    if (!session) {
+      return { totalVotes: 0, ownVotes: 0, delegatedVotes: 0, results: [], delegations, unnamedDelegations };
+    }
+
+    const ownVotes = sessionVotes.length;
+    const delegatedVotes = sessionVotes.reduce((sum, v) => sum + (weightOf(v) - 1), 0);
+    const totalVotes = ownVotes + delegatedVotes;
+
     const optionCounts = session.options.map((opt, idx) => {
       const optionWeight = sessionVotes
         .filter(v => v.optionIndex === idx)
-        .reduce((sum, v) => sum + v.weight, 0);
+        .reduce((sum, v) => sum + weightOf(v), 0);
       return {
         option: opt,
         votes: optionWeight,
@@ -110,21 +139,13 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
       };
     });
 
-    // Wahlübertragungen: jede Stimme kann Vollmachten mitbringen, die Namen
-    // stehen in votes.delegation_names. Bewusst OHNE die gewählte Option --
-    // das Wahlgeheimnis gilt auch für die übertragenen Stimmen.
-    const delegations = sessionVotes
-      .flatMap(v => (v.delegationNames || []).map(name => ({
-        name: name.trim(),
-        carrierCode: v.voterCode
-      })))
-      .filter(d => d.name.length > 0)
-      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-
     return {
       totalVotes,
+      ownVotes,
+      delegatedVotes,
       results: optionCounts,
       delegations,
+      unnamedDelegations,
     };
   };
 
@@ -347,7 +368,9 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
               <div className="space-y-4" id="sessions_admin_list">
                 {sessions.map(s => {
                   const isOpen = s.status === 'open';
-                  const { totalVotes, results, delegations } = getSessionResults(s.id);
+                  const {
+                    totalVotes, ownVotes, delegatedVotes, results, delegations, unnamedDelegations
+                  } = getSessionResults(s.id);
 
                   return (
                     <div key={s.id} className="premium-card p-6 space-y-4 relative overflow-hidden">
@@ -367,6 +390,11 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                             </span>
                             <span className="text-xs text-slate-400 font-bold">
                               • {totalVotes} {totalVotes === 1 ? 'Stimme' : 'Stimmen'} erfasst
+                              {delegatedVotes > 0 && (
+                                <span className="font-semibold">
+                                  {' '}({ownVotes} eigene + {delegatedVotes} übertragen)
+                                </span>
+                              )}
                             </span>
                           </div>
                         </div>
@@ -436,35 +464,49 @@ export const AdminSection: React.FC<AdminSectionProps> = ({
                             Wahlübertragungen
                           </span>
                           <span className="text-[10px] font-black text-slate-500 font-mono">
-                            {delegations.length} von {totalVotes} {totalVotes === 1 ? 'Stimme' : 'Stimmen'}
+                            {delegatedVotes} von {totalVotes} {totalVotes === 1 ? 'Stimme' : 'Stimmen'}
                           </span>
                         </div>
 
-                        {delegations.length === 0 ? (
+                        {delegations.length === 0 && unnamedDelegations === 0 ? (
                           <p className="text-xs text-slate-400 font-semibold">
                             {s.allowDelegation
                               ? 'Bisher keine Stimmen übertragen.'
                               : 'Für diesen Wahlgang sind keine Übertragungen zugelassen.'}
                           </p>
                         ) : (
-                          <ul className="flex flex-wrap gap-1.5">
-                            {delegations.map((d, i) => (
-                              <li
-                                key={`${d.name}-${i}`}
-                                className="flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-xl bg-slate-50 border border-slate-200"
-                              >
-                                <span className="text-xs font-bold text-slate-800">{d.name}</span>
-                                {d.carrierCode && (
-                                  <span
-                                    className="text-[9px] font-mono font-black text-slate-400 uppercase"
-                                    title="Code des Mitglieds, das die Stimme mitgebracht hat"
-                                  >
-                                    {d.carrierCode}
-                                  </span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
+                          <>
+                            <ul className="flex flex-wrap gap-1.5">
+                              {delegations.map((d, i) => (
+                                <li
+                                  key={`${d.name}-${i}`}
+                                  className="flex items-center gap-1.5 pl-2.5 pr-2 py-1 rounded-xl bg-slate-50 border border-slate-200"
+                                >
+                                  <span className="text-xs font-bold text-slate-800">{d.name}</span>
+                                  {d.carrierCode && (
+                                    <span
+                                      className="text-[9px] font-mono font-black text-slate-400 uppercase"
+                                      title="Code des Mitglieds, das die Stimme mitgebracht hat"
+                                    >
+                                      {d.carrierCode}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+
+                            {/* Kein Platzhaltername: fehlende Namen werden als Lücke benannt. */}
+                            {unnamedDelegations > 0 && (
+                              <p className="text-xs text-amber-700 font-semibold mt-2 flex items-start gap-1.5">
+                                <AlertTriangle size={12} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                                <span>
+                                  {unnamedDelegations} {unnamedDelegations === 1 ? 'Übertragung' : 'Übertragungen'} ohne
+                                  hinterlegten Namen — in <span className="font-mono">votes.delegation_names</span> steht
+                                  dafür nichts.
+                                </span>
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

@@ -180,110 +180,77 @@ export default function App() {
   const submitVoteToSupabase = async (vote: Vote) => {
     if (!supabase) return false;
 
-    const payloads = [
-      {
-        table: 'votes',
-        payloadWithId: {
-          id: vote.id,
-          session_id: vote.sessionId,
-          option_index: vote.optionIndex,
-          voter_code: vote.voterCode,
-          voter_token: vote.voterToken,
-          weight: vote.weight,
-          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          created_at: vote.createdAt
-        },
-        payloadWithoutId: {
-          session_id: vote.sessionId,
-          option_index: vote.optionIndex,
-          voter_code: vote.voterCode,
-          voter_token: vote.voterToken,
-          weight: vote.weight,
-          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          created_at: vote.createdAt
-        }
-      },
-      {
-        table: 'votes',
-        payloadWithId: {
-          id: vote.id,
-          sessionId: vote.sessionId,
-          optionIndex: vote.optionIndex,
-          voterCode: vote.voterCode,
-          voterToken: vote.voterToken,
-          weight: vote.weight,
-          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          createdAt: vote.createdAt
-        },
-        payloadWithoutId: {
-          sessionId: vote.sessionId,
-          optionIndex: vote.optionIndex,
-          voterCode: vote.voterCode,
-          voterToken: vote.voterToken,
-          weight: vote.weight,
-          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          createdAt: vote.createdAt
-        }
-      },
-      {
-        table: 'voted',
-        payloadWithId: {
-          id: vote.id,
-          session_id: vote.sessionId,
-          option_index: vote.optionIndex,
-          voter_code: vote.voterCode,
-          voter_token: vote.voterToken,
-          weight: vote.weight,
-          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          created_at: vote.createdAt
-        },
-        payloadWithoutId: {
-          session_id: vote.sessionId,
-          option_index: vote.optionIndex,
-          voter_code: vote.voterCode,
-          voter_token: vote.voterToken,
-          weight: vote.weight,
-          delegation_names: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          created_at: vote.createdAt
-        }
-      },
-      {
-        table: 'voted',
-        payloadWithId: {
-          id: vote.id,
-          sessionId: vote.sessionId,
-          optionIndex: vote.optionIndex,
-          voterCode: vote.voterCode,
-          voterToken: vote.voterToken,
-          weight: vote.weight,
-          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          createdAt: vote.createdAt
-        },
-        payloadWithoutId: {
-          sessionId: vote.sessionId,
-          optionIndex: vote.optionIndex,
-          voterCode: vote.voterCode,
-          voterToken: vote.voterToken,
-          weight: vote.weight,
-          delegationNames: Array.isArray(vote.delegationNames) ? JSON.stringify(vote.delegationNames) : vote.delegationNames,
-          createdAt: vote.createdAt
-        }
-      }
-    ];
+    const names = vote.delegationNames && vote.delegationNames.length > 0
+      ? vote.delegationNames
+      : null;
 
-    for (const item of payloads) {
-      try {
-        let { error } = await supabase.from(item.table).insert([item.payloadWithId]);
-        if (!error) return true;
+    // Das Gewicht ist immer: eigene Stimme + Übertragungen.
+    const weight = Math.max(1 + (names?.length ?? 0), vote.weight || 1);
 
-        let res = await supabase.from(item.table).insert([item.payloadWithoutId]);
-        if (!res.error) return true;
-      } catch (err) {
-        // Continue to next strategy
+    // 'delegation_names' kann text[]/jsonb (Array) oder text (JSON-String)
+    // sein. Zuerst das echte Array versuchen -- sonst landet bei einer
+    // Array-Spalte nichts bzw. bei text ein String, der später nicht als
+    // Namensliste erkannt wird.
+    const delegationVariants: (string[] | string | null)[] = names
+      ? [names, JSON.stringify(names)]
+      : [null];
+
+    const errors: string[] = [];
+
+    for (const delegation of delegationVariants) {
+      const payloads = [
+        {
+          table: 'votes',
+          snake: true
+        },
+        {
+          table: 'votes',
+          snake: false
+        },
+        {
+          table: 'voted',
+          snake: true
+        },
+        {
+          table: 'voted',
+          snake: false
+        }
+      ];
+
+      for (const { table, snake } of payloads) {
+        const base: Record<string, any> = snake
+          ? {
+              session_id: vote.sessionId,
+              option_index: vote.optionIndex,
+              voter_code: vote.voterCode,
+              voter_token: vote.voterToken,
+              weight,
+              delegation_names: delegation,
+              created_at: vote.createdAt
+            }
+          : {
+              sessionId: vote.sessionId,
+              optionIndex: vote.optionIndex,
+              voterCode: vote.voterCode,
+              voterToken: vote.voterToken,
+              weight,
+              delegationNames: delegation,
+              createdAt: vote.createdAt
+            };
+
+        for (const payload of [{ id: vote.id, ...base }, base]) {
+          try {
+            const { error } = await supabase.from(table).insert([payload]);
+            if (!error) return true;
+            errors.push(`${table} (${snake ? 'snake_case' : 'camelCase'}): ${error.message}`);
+          } catch (err: any) {
+            errors.push(`${table} (${snake ? 'snake_case' : 'camelCase'}): ${err?.message || err}`);
+          }
+        }
       }
     }
 
-    console.error("All insertion strategies failed for vote.");
+    console.error("Stimme konnte nicht gespeichert werden:", errors);
     return false;
   };
 
@@ -1012,7 +979,8 @@ export default function App() {
       optionIndex,
       voterCode: code,
       voterToken: `token-${Math.random().toString(36).substr(2, 9)}`,
-      weight,
+      // Eigene Stimme + Übertragungen, unabhängig davon was übergeben wurde.
+      weight: Math.max(1 + (delegationNames?.length ?? 0), weight || 1),
       delegationNames,
       createdAt: new Date().toISOString(),
     };
